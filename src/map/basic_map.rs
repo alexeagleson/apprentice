@@ -1,4 +1,7 @@
-use crate::map::{idx_xy, rect::Rect, xy_idx, TileType, MAP_COUNT, MAP_HEIGHT, MAP_WIDTH};
+use crate::map::{
+  idx_xy, rect::Rect, xy_idx, TileType, MAP_COUNT, MAP_HEIGHT, MAP_WIDTH, MAX_ROOMS, ROOM_MAX_SIZE,
+  ROOM_MIN_SIZE,
+};
 use rltk::{Algorithm2D, BaseMap, DistanceAlg::Pythagoras, Point, RandomNumberGenerator, SmallVec};
 use serde::{Deserialize, Serialize};
 use specs::Entity;
@@ -37,7 +40,7 @@ impl Map {
 
   pub fn populate_blocked(&mut self) {
     for (i, tile) in self.tiles.iter_mut().enumerate() {
-      self.blocked[i] = *tile == TileType::Wall;
+      self.blocked[i] = *tile == TileType::Wall || *tile == TileType::Door;
     }
   }
 
@@ -53,8 +56,12 @@ impl Map {
     !self.blocked[idx as usize]
   }
 
-  fn set_tile_to_floor(&mut self, idx: usize) {
+  pub fn set_tile_to_floor(&mut self, idx: usize) {
     self.tiles[idx] = TileType::Floor;
+  }
+
+  fn set_tile_to_door(&mut self, idx: usize) {
+    self.tiles[idx] = TileType::Door;
   }
 
   fn add_horizontal_tunnel(&mut self, x1: i32, x2: i32, y: i32) {
@@ -110,6 +117,43 @@ impl Map {
     self.stairs_up = Some(Point::new(stairs_position.0, stairs_position.1));
   }
 
+  pub fn add_doors_to_rooms(&mut self) {
+    for i in 0..self.rooms.len() {
+      for x in (self.rooms[i as usize].x1)..(self.rooms[i as usize].x2 + 2) {
+        for y in (self.rooms[i as usize].y1)..(self.rooms[i as usize].y2 + 2) {
+
+          // Checks the left and right walls of a room and adds a door if the tile is empty with a wall above & below
+          if x == self.rooms[i as usize].x1 || x == self.rooms[i as usize].x2 + 1 {
+            let idx = self.xy_idx(x, y);
+            let idx_up = self.xy_idx(x, y - 1);
+            let idx_down = self.xy_idx(x, y + 1);
+
+            if self.tiles[idx as usize] != TileType::Wall
+              && self.tiles[idx_up as usize] == TileType::Wall
+              && self.tiles[idx_down as usize] == TileType::Wall
+            {
+              self.set_tile_to_door(idx as usize);
+            }
+          }
+
+          // Checks the up and bottom walls of a room and adds a door if the tile is empty with a wall left & right
+          if y == self.rooms[i as usize].y1 || y == self.rooms[i as usize].y2 + 1 {
+            let idx = self.xy_idx(x, y);
+
+            let idx_left = self.xy_idx(x - 1, y);
+            let idx_right = self.xy_idx(x + 1, y);
+            if self.tiles[idx as usize] != TileType::Wall
+              && self.tiles[idx_left as usize] == TileType::Wall
+              && self.tiles[idx_right as usize] == TileType::Wall
+            {
+              self.set_tile_to_door(idx as usize);
+            }
+          }
+        }
+      }
+    }
+  }
+
   pub fn create_basic_map(depth: i32) -> Self {
     let mut map = Map {
       tiles: vec![TileType::Wall; MAP_COUNT],
@@ -125,10 +169,6 @@ impl Map {
       exit: None,
       depth,
     };
-
-    const MAX_ROOMS: i32 = 30;
-    const ROOM_MIN_SIZE: i32 = 6;
-    const ROOM_MAX_SIZE: i32 = 10;
 
     let mut rng = RandomNumberGenerator::new();
 
@@ -149,7 +189,7 @@ impl Map {
         if !map.rooms.is_empty() {
           let (new_x, new_y) = new_room.center();
           let (prev_x, prev_y) = map.rooms[map.rooms.len() - 1].center();
-          if rng.range(0, 1) == 1 {
+          if rng.range(0, 2) == 1 {
             map.add_horizontal_tunnel(prev_x as i32, new_x as i32, prev_y as i32);
             map.add_vertical_tunnel(new_x as i32, new_y as i32, prev_y as i32);
           } else {
@@ -160,13 +200,14 @@ impl Map {
         map.rooms.push(new_room);
       }
     }
+    map.add_doors_to_rooms();
     map
   }
 }
 
 impl BaseMap for Map {
   fn is_opaque(&self, idx: usize) -> bool {
-    self.tiles[idx as usize] == TileType::Wall
+    self.tiles[idx as usize] == TileType::Wall || self.tiles[idx as usize] == TileType::Door
   }
 
   fn get_available_exits(&self, idx: usize) -> SmallVec<[(usize, f32); 10]> {

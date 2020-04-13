@@ -9,6 +9,10 @@ pub const MAP_WIDTH: usize = 80;
 pub const MAP_HEIGHT: usize = 43;
 pub const MAP_COUNT: usize = MAP_HEIGHT * MAP_WIDTH;
 
+pub const MAX_ROOMS: i32 = 30;
+pub const ROOM_MIN_SIZE: i32 = 6;
+pub const ROOM_MAX_SIZE: i32 = 10;
+
 pub fn xy_idx(x: i32, y: i32) -> i32 {
   y * MAP_WIDTH as i32 + x
 }

@@ -115,7 +115,7 @@ pub fn spawn_goblin(ecs: &mut World, idx: i32, level: i32) -> Entity {
 pub fn spawn_random_monster(ecs: &mut World, idx: i32, level: i32) -> Entity {
   let roll = {
     let mut rng = ecs.write_resource::<RandomNumberGenerator>();
-    rng.roll_dice(1, 2)
+    rng.roll_dice(1, 6)
   };
   match roll {
     1 => spawn_orc(ecs, idx, level),
